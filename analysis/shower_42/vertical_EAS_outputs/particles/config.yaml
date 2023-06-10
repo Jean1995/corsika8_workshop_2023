@@ -1,0 +1,22 @@
+type: ObservationPlane
+units:
+  length: m
+plane:
+  center:
+    - 0
+    - 0
+    - 6371000
+  normal:
+    - 0
+    - 0
+    - 1
+x-axis:
+  - 1
+  - 0
+  - 0
+y-axis:
+  - 0
+  - 1
+  - 0
+delete_on_hit: true
+name: particles
