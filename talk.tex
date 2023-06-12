@@ -21,6 +21,8 @@
 \usepackage{tikz-feynman}
 \usetikzlibrary{shapes, arrows, backgrounds, fit, tikzmark, arrows.meta, calc, quotes, angles}
 
+\usepackage{pdfpages}
+
 \usepackage{tcolorbox}% for framed rounded boxes
 \usepackage{emoji}
 \usepackage{appendixnumberbeamer}
@@ -28,6 +30,7 @@
 \usepackage{caption}
 \captionsetup[figure]{labelformat=empty}% redefines the caption setup of the figures environment in the beamer class.
 
+\usepackage[normalem]{ulem}
 
 % load the theme after all packages
 
@@ -439,7 +442,6 @@
               \begin{itemize}
                 \item[$\rightarrow$] No treatment for the change of continuous energy losses due to LPM implemented yet (discussion about this see \href{https://indico.scc.kit.edu/event/2580/contributions/9629/attachments/4716/7107/lpm_effect.pdf}{here})
               \end{itemize}
-              \item Currently under Code Review (see \href{https://gitlab.iap.kit.edu/AirShowerPhysics/corsika/-/merge_requests/471}{here})
             \end{itemize}
         \end{column}
         \begin{column}{0.55\textwidth}
@@ -509,6 +511,81 @@
 \section{Open issues, questions, and future developments}
 
 
+\begin{frame}[c]
+
+    \textbf{Short interlude: Concept of PROPOSAL}
+
+    \begin{columns}[onlytextwidth]
+
+      \begin{column}{0.5\textwidth}
+        \begin{itemize}
+            \item How to calculate the mean free path $\lambda \propto \sigma^{-1}$ of a particle?
+            \item Naive idea: Take total cross section $\sigma = \int_{v_\text{min}}^{v_\text{max}} \frac{\symup{d}\sigma}{\symup{d}v}\, \symup{dv}$, where $v$ is the relative energy loss of a particle in a single interaction
+            \begin{itemize}
+                \item[$\rightarrow$] First problem: Differential cross section diverges for $v \rightarrow 0$. Therefore, $\lambda$ approaches $0$ \emoji{zap}
+                \item[$\rightarrow$] Second issue: Inefficient, because this would mean we would have to sample every single interaction individually (no matter how small $v$ is!). Or in other words: We get very small steps.
+            \end{itemize}
+        \end{itemize}
+      \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \includegraphics[width=\textwidth]{diverging_v.pdf}
+      \end{figure}
+    \end{column}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame}[c]
+    \begin{columns}[onlytextwidth]
+
+      \begin{column}{0.5\textwidth}
+        \begin{itemize}
+            \item Approach: When sampling $\lambda$, only take into account energy losses with $v > v_\text{cut}$
+            \begin{itemize}
+                \item[$\rightarrow$] $\sigma_\text{stoch} = \int_{v_\text{cut}}^{v_\text{max}} \frac{\symup{d}\sigma}{\symup{d}v} \, \symup{d}v$
+            \end{itemize}
+            \item This gives us a finite value for $\sigma_\text{stoch}$ and $\lambda_\text{stoch}$
+            \item Note: This $v_\text{cut}$ can either be a relative value (e.g. \SI{1}{\percent}) or an absolute value (e.g. \SI{5}{\mega\electronvolt})
+        \end{itemize}
+      \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \includegraphics[width=\textwidth]{diverging_v_stoch.pdf}
+      \end{figure}
+    \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}[c]
+    \begin{columns}[onlytextwidth]
+
+      \begin{column}{0.5\textwidth}
+        \begin{itemize}
+            \item What about the interactions with $v \leq v_\text{cut}$?
+            \item We calculate an effective energy loss per distance:
+            \begin{itemize}
+              \item[$\rightarrow$] $\frac{\symup{d}E}{\symup{d}x} \propto E \int_{v_\text{min}}^{v_\text{cut}} v \frac{\symup{d}\sigma}{\symup{d}v} \, \symup{d}v$
+            \end{itemize}
+            \item Apply these continuous energy losses to propagated distance between stochastic interactions
+            \item Now, all energies losses are correctly taken into account! \emoji{tada}
+            \item Important question: Which value to choose for $v_\text{cut}$?
+        \end{itemize}
+
+
+      \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \includegraphics[width=\textwidth]{diverging_v_cont.pdf}
+      \end{figure}
+    \end{column}
+    \end{columns}
+\end{frame}
+
+
 \begin{frame}
 
   \textbf{Usage of ParticleCut and ProductionThreshold}
@@ -517,9 +594,9 @@
     \item Within CORSIKA~8, there are two energy settings relevant for the EM component
     \begin{itemize}
       \item[$\rightarrow$] $\texttt{ParticleCut}$: Particles below this (total) energy are removed from the Stack
-      \item[$\rightarrow$] \texttt{ProductionThreshold}: Only energy losses above this energy are treated stochastically. Individual energy losses below this energy are treated continuously.
+      \item[$\rightarrow$] $\texttt{ProductionThreshold}$: Only energy losses above this energy are treated stochastically. Individual energy losses below this energy are treated continuously. This is what I have just introduced as a $v_\text{cut}$.
     \end{itemize}
-    \item So far, both settings have been set to an identical value
+    \item So far, both settings have been set to an identical total energy
     \begin{itemize}
       \item[$\rightarrow$] Motivation: We don't need to individually simulate an energy loss if the produced secondary particles would be directly removed from the stack
     \end{itemize}
@@ -542,7 +619,7 @@
             \begin{itemize}
               \item Possible solutions: 
               \begin{enumerate}
-                \item Set the \texttt{ProductionThreshold} to a fraction of the \texttt{ParticleCut} (e.g. \SI{10}{\percent})
+                \item Set the \texttt{ProductionThreshold} to a fraction of the \texttt{ParticleCut} (e.g. \SI{1}{\percent})
                 \item Introduce a relative \texttt{ProductionThreshold} in addition to the absolute one. This is intrinsically possible with PROPOSAL (called $v_\text{cut}$).
               \end{enumerate}
               \item Plot on the right shows the comparison to a simulation where the $v_\text{cut}$ has been included
@@ -561,23 +638,6 @@
         \end{column}
     \end{columns}
 \end{frame}
-
-
-\begin{frame}
-
-  \textbf{Using the flexibility of PROPOSAL}
-
-    \begin{itemize}
-      \item One big advantage of PROPOSAL is its flexibility
-      \begin{itemize}
-        \item[$\rightarrow$] PROPOSAL can provide different parametrizations to describe physics processes
-        \item[$\rightarrow$] This can be especially interesting for parametrizations that are uncertain or to conduct simulations studies (e.g. for BSM physics)
-      \end{itemize}
-      \item Currently, CORSIKA~8 always uses a set of "default parametrizations" suggested by PROPOSAL
-      \item To offer this flexibility to CORSIKA~8, we need to think about the treatment of steering within CORSIKA~8
-    \end{itemize}
-\end{frame}
-
 
 
 \begin{frame}
@@ -638,6 +698,49 @@
     \end{columns}
 \end{frame}
 
+\begin{frame}
+
+  \textbf{Some other aspects...}
+
+   \vspace{3mm}
+
+  \emph{Open pull requests}
+
+    \begin{itemize}
+      \item \sout{LPM effect implementation} $\rightarrow$ Merged on monday!
+      \item Stochastic photon propagation
+      \begin{itemize}
+        \item[$\rightarrow$] No continuous losses for photons anymore. Numerically more stable, less warnings, no endless loops.
+      \end{itemize}
+      \item Update to PROPOSAL 7.6.1
+      \begin{itemize}
+        \item[$\rightarrow$] Includes some vital bugfixes, e.g. for ionization losses
+        \item[$\rightarrow$] \texttt{MolièreInterpol}, significant speed-up of multiple scattering
+        \item[$\rightarrow$] Improved sampling methods for pairproduction ($\theta$) and tripet production ($\rho$)
+      \end{itemize}
+    \end{itemize}
+
+  \emph{Points of discussion}
+
+  \begin{itemize}
+    \item Steering of the options provided by PROPOSAL
+    \begin{itemize}
+        \item[$\rightarrow$] PROPOSAL has a flexible structure, allowing users to adapt/change physics parametrizations
+        \item[$\rightarrow$] How to combine these features with steering of CORSIKA~8?
+    \end{itemize}
+    \item Table creation
+    \begin{itemize}
+        \item[$\rightarrow$] Current solution not optimal for users
+        \item[$\rightarrow$] Already had some discussions yesterday after Alexanders talk, in the coffee break, and on the train
+    \end{itemize}
+   \end{itemize}
+
+
+\end{frame}
+
+
+
+
 \begin{frame}[plain,c,noframenumbering]
   \begin{center}
     \Huge Summary
@@ -650,9 +753,9 @@
 
     \begin{itemize}
       \item A lot of issues have been fixed since the last workshop
-      \item What has not been mentioned: A large amount of smaller and larger bugfixes that helped improved the stability of CORSIKA~8 (warnings and/or crashes)
+      \item What has not been mentioned: A large amount of smaller and larger bugfixes that helped improved the stability of CORSIKA~8
       \begin{itemize}
-        \item[$\rightarrow$] Much less (close to none?!) crashes due to the EM component \emoji{crossed-fingers}
+        \item[$\rightarrow$] Less crashes and warnings due to the EM component \emoji{crossed-fingers}
       \end{itemize}
       \item All relevant physics processes are included by now
       \item Some improvements and investigations are still necessary
@@ -664,6 +767,104 @@
       \item Elephant in the room not mentioned in this talk: Need for runtime optimization \emoji{elephant}
     \end{itemize}
 \end{frame}
+
+
+\appendix
+
+\begin{frame}[plain,c,noframenumbering]
+  \begin{center}
+    \Huge Backup
+  \end{center}
+\end{frame}
+
+
+\begin{frame}[plain,c,noframenumbering]
+  \begin{center}
+    \Huge Studies of $v_\text{cut}$ settings
+  \end{center}
+\end{frame}
+
+
+\begin{frame}
+            \begin{figure}
+                \centering
+                \includegraphics[width=0.75\textwidth]{plots/v_analysis_charged.png}
+                \caption{Longitudinal profile of charged particles in 100 PeV $e^-$ showers, using different (or none) $v_\text{cut}$ settings.}
+            \end{figure}
+\end{frame}
+
+\begin{frame}
+            \begin{figure}
+                \centering
+                \includegraphics[width=0.75\textwidth]{plots/v_analysis_charged_ratio.png}
+                \caption{Longitudinal profile of charged particles in 100 PeV $e^-$ showers, using different (or none) $v_\text{cut}$ settings.}
+            \end{figure}
+\end{frame}
+
+\begin{frame}
+            \begin{figure}
+                \centering
+                \includegraphics[width=0.75\textwidth]{plots/v_analysis_photon.png}
+                \caption{Longitudinal profile of photons in 100 PeV $e^-$ showers, using different (or none) $v_\text{cut}$ settings.}
+            \end{figure}
+\end{frame}
+
+\begin{frame}[plain,c,noframenumbering]
+  \begin{center}
+    \Huge Effects of $e_\text{cut}$ and $v_\text{cut}$
+  \end{center}
+\end{frame}
+
+
+\begin{frame}
+            \begin{figure}
+                \centering
+                \includegraphics[width=0.7\textwidth]{plots/cut_diss_0.5_1e-3.png}
+                \caption{Muon energy losses for different interaction types, using $e_\text{cut} = \SI{0.5}{\mega\electronvolt}$ and $v_\text{cut} = \num{e-3}$.\\ \emph{From "Der Leptonpropagator PROPOSAL", Jan-Hendrik Köhne, PhD thesis 2013}}
+            \end{figure}
+\end{frame}
+
+
+\begin{frame}
+            \begin{figure}
+                \centering
+                \includegraphics[width=0.7\textwidth]{plots/cut_diss_1e-3.png}
+                \caption{Muon energy losses for different interaction types, using no $e_\text{cut}$ and $v_\text{cut} = \num{e-3}$.\\ \emph{From "Der Leptonpropagator PROPOSAL", Jan-Hendrik Köhne, PhD thesis 2013}}
+            \end{figure}
+\end{frame}
+
+\begin{frame}
+            \begin{figure}
+                \centering
+                \includegraphics[width=0.7\textwidth]{plots/cut_diss_500_1e-3.png}
+                \caption{Muon energy losses for different interaction types, using $e_\text{cut} = \SI{500}{\mega\electronvolt}$ and $v_\text{cut} = \num{e-3}$.\\ \emph{From "Der Leptonpropagator PROPOSAL", Jan-Hendrik Köhne, PhD thesis 2013}}
+            \end{figure}
+\end{frame}
+
+\begin{frame}[plain,c,noframenumbering]
+  \begin{center}
+    \Huge Additional material: LPM effect
+  \end{center}
+\end{frame}
+
+
+{
+\setbeamercolor{background canvas}{bg=}
+\includepdf[pages=6]{lpm_effect.pdf}
+}
+
+{
+\setbeamercolor{background canvas}{bg=}
+\includepdf[pages=7]{lpm_effect.pdf}
+}
+
+
+{
+\setbeamercolor{background canvas}{bg=}
+\includepdf[pages=8]{lpm_effect.pdf}
+}
+
+
 
 \end{document}
 
